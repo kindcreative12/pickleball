@@ -16,8 +16,8 @@ import {
   POINTS_TO_WIN,
   SERVE_DELAY,
   WIN_BY,
-} from '../shared/constants.js';
-import type { GameState, Input, Mode, Phase, Side } from '../shared/types.js';
+} from './constants.js';
+import type { GameState, Input, Mode, Phase, Side } from './types.js';
 
 const NO_INPUT: Input = { up: false, down: false, left: false, right: false, power: false };
 
@@ -109,6 +109,12 @@ export class Game {
       this.phase = 'waiting';
       this.message = 'Waiting for players…';
     }
+  }
+
+  /** Peers announce their name after connecting, so it can arrive late. */
+  rename(id: string, name: string): void {
+    const player = this.players.find((p) => p.id === id);
+    if (player) player.name = name;
   }
 
   setInput(id: string, input: Input): void {

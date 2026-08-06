@@ -1,15 +1,16 @@
 {
   "name": "pickleball",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/client/main.ts --bundle --format=esm --outfile=public/bundle.js",
+    "build": "node scripts/build.mjs",
     "start": "npm run build && tsx src/server/index.ts",
     "dev": "npm run build && tsx watch src/server/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "trystero": "^0.25.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {

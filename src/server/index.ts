@@ -19,10 +19,9 @@ const MIME: Record<string, string> = {
 
 const server = createServer(async (req, res) => {
   const url = req.url === '/' || !req.url ? '/index.html' : req.url.split('?')[0];
-  const candidates =
-    url === '/index.html'
-      ? [join(ROOT, 'src/client/index.html')]
-      : [join(ROOT, 'public', normalize(url)), join(ROOT, 'src/client', normalize(url))];
+  // Serves the same dist/ that GitHub Pages publishes, so what you test
+  // locally is what peers load.
+  const candidates = [join(ROOT, 'dist', normalize(url))];
 
   for (const path of candidates) {
     if (!path.startsWith(ROOT)) continue;

@@ -1,7 +1,7 @@
 import type { WebSocket } from 'ws';
 import { BROADCAST_HZ, TICK_DT, TICK_HZ } from '../shared/constants.js';
 import type { Mode, ServerMessage } from '../shared/types.js';
-import { Game } from './game.js';
+import { Game } from '../shared/game.js';
 
 interface Member {
   id: string;

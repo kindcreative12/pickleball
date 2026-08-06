@@ -43,6 +43,8 @@ export type ClientMessage =
   | { t: 'input'; input: Input };
 
 export type ServerMessage =
-  | { t: 'joined'; id: string; room: string; mode: Mode; side: Side }
+  // `side` is absent in peer-to-peer play: the host assigns sides, and a peer
+  // learns its own from the first state it receives.
+  | { t: 'joined'; id: string; room: string; mode: Mode; side?: Side }
   | { t: 'state'; state: GameState }
   | { t: 'error'; message: string };

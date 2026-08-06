@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-08-06
+
+### Added
+
+- Peer-to-peer play with no server, via WebRTC data channels matched by room code over [Trystero](https://github.com/dmotz/trystero). The room code doubles as the signalling encryption password, so only people given the code can read it; gameplay traffic is DTLS-encrypted between peers by mandate.
+- Host election: peers sort their ids and the lowest runs the simulation. Every peer runs the same election over the same set, so they agree without negotiating. If the host leaves the next one takes over, though with a fresh game — the score does not survive.
+- `transport.ts`, behind which both connection styles look identical to the rest of the client. `?transport=ws` selects the Node server, which is far easier to debug locally than two phones.
+- GitHub Pages workflow publishing `dist/` on every push to `main`.
+
+### Changed
+
+- The simulation moved from `server/game.ts` to `shared/game.ts`. It never had a Node dependency, which is precisely what lets the same code run in a server process or in a peer's browser tab — the port cost nothing.
+- Build now emits a self-contained `dist/`, which the Node server also serves, so local testing and the published page run byte-identical output.
+- Client script path is relative, since Pages serves a project site from a subpath.
+
 ## [0.1.0] — 2026-08-06
 
 ### Added

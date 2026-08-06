@@ -4,14 +4,8 @@ import {
   KITCHEN_DEPTH,
   NET_X,
 } from '../shared/constants.js';
-import type {
-  ClientMessage,
-  GameState,
-  Input,
-  Mode,
-  ServerMessage,
-  Side,
-} from '../shared/types.js';
+import type { ClientMessage, GameState, Input, Mode, Side } from '../shared/types.js';
+import { createTransport, type Transport } from './transport.js';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -29,10 +23,17 @@ const OFFSET_Y = (canvas.height - COURT_WIDTH * SCALE) / 2;
 const px = (x: number) => MARGIN + x * SCALE;
 const py = (y: number) => OFFSET_Y + y * SCALE;
 
-let socket: WebSocket | null = null;
+let transport: Transport | null = null;
 let selfId: string | null = null;
-let selfSide: Side = 'left';
 let state: GameState | null = null;
+
+/**
+ * Peer-to-peer is the default because it works from static hosting with no
+ * server at all. `?transport=ws` selects the Node server instead, which is far
+ * easier to debug locally with two tabs.
+ */
+const TRANSPORT: 'ws' | 'p2p' =
+  new URLSearchParams(location.search).get('transport') === 'ws' ? 'ws' : 'p2p';
 
 const input: Input = { up: false, down: false, left: false, right: false, power: false };
 
@@ -185,33 +186,30 @@ form.addEventListener('submit', (e) => {
 
 function connect(name: string, room: string, mode: Mode): void {
   errorBox.textContent = '';
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  socket = new WebSocket(`${proto}://${location.host}`);
-
-  socket.addEventListener('open', () => send({ t: 'join', room, name, mode }));
-  socket.addEventListener('close', () => {
-    menu.style.display = 'grid';
-    touchLayer.hidden = true;
-    errorBox.textContent = 'Disconnected';
-  });
-  socket.addEventListener('message', (event) => {
-    const msg = JSON.parse(event.data as string) as ServerMessage;
-    if (msg.t === 'joined') {
-      selfId = msg.id;
-      selfSide = msg.side;
-      menu.style.display = 'none';
-      if (isTouch) touchLayer.hidden = false;
-    } else if (msg.t === 'state') {
-      state = msg.state;
-    } else if (msg.t === 'error') {
-      errorBox.textContent = msg.message;
-      socket?.close();
-    }
+  transport = createTransport(TRANSPORT, {
+    room,
+    name,
+    gameMode: mode,
+    onMessage: (msg) => {
+      if (msg.t === 'joined') {
+        selfId = msg.id;
+        menu.style.display = 'none';
+        if (isTouch) touchLayer.hidden = false;
+      } else if (msg.t === 'state') {
+        state = msg.state;
+      } else if (msg.t === 'error') {
+        errorBox.textContent = msg.message;
+        menu.style.display = 'grid';
+        touchLayer.hidden = true;
+        transport?.close();
+        transport = null;
+      }
+    },
   });
 }
 
 function send(msg: ClientMessage): void {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(msg));
+  transport?.send(msg);
 }
 
 // --- rendering --------------------------------------------------------------
