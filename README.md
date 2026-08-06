@@ -1,12 +1,16 @@
 # Pickleball
 
+### ▶ Play: **https://kindcreative12.github.io/pickleball/**
+
 A browser-based, real-time multiplayer pickleball game. Agree on a room code, and you are playing — no account, no install, and no server to run.
 
-> **Status:** early. It typechecks and builds cleanly, but has not yet been played end-to-end, so expect some time spent on what the physics actually does versus what it was meant to do.
+> **Status:** deployed but unplayed. It typechecks, builds, and serves, none of which proves a rally works. The first person to open it is running the first real test — expect bugs in the physics and the host handoff.
 
 ## Playing
 
-Open the published page, pick a room code, and share that code with whoever you want to play. Everyone who enters the same code lands in the same match.
+Open the link above, pick a room code, and share that code with whoever you want to play. Everyone who enters the same code lands in the same match.
+
+**On a phone there is nothing to install and nothing to run** — open the URL and turn the phone sideways. The game is static files; the code downloads and runs in your browser. `npm` never enters into it.
 
 ## Controls
 
@@ -22,7 +26,9 @@ Open the published page, pick a room code, and share that code with whoever you 
 
 Hitting is automatic when the ball comes within paddle reach; holding a direction as you strike aims the shot.
 
-## Running it locally
+## Developing
+
+You do not need any of this to play — only to change the game.
 
 ```bash
 npm install
@@ -39,6 +45,8 @@ Then open <http://localhost:3000>.
 | `npm run typecheck` | Typechecks without emitting |
 
 Two transports exist. The default is peer-to-peer, which is what the published page uses. Appending **`?transport=ws`** switches to the bundled Node server instead — much easier to debug with two local tabs, since everything runs in one process you control.
+
+Pushing to `main` rebuilds and redeploys the published page automatically via `.github/workflows/pages.yml`.
 
 ## How it fits together
 
