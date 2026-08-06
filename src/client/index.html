@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pickleball</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --court: #2f7d5b;
+        --ink: #f2f5f4;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #14201c;
+        color: var(--ink);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      #wrap { position: relative; }
+      canvas {
+        display: block;
+        width: min(96vw, 1100px);
+        height: auto;
+        border-radius: 10px;
+        background: #14201c;
+      }
+      #hud {
+        position: absolute;
+        inset: 12px 12px auto 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        pointer-events: none;
+        font-variant-numeric: tabular-nums;
+      }
+      #score { font-size: 26px; font-weight: 650; letter-spacing: 0.02em; }
+      #message { opacity: 0.85; }
+      #menu {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(10, 18, 15, 0.88);
+        border-radius: 10px;
+      }
+      form {
+        display: grid;
+        gap: 10px;
+        width: min(320px, 80%);
+      }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      label { font-size: 13px; opacity: 0.75; }
+      input, select, button {
+        font: inherit;
+        padding: 9px 11px;
+        border-radius: 7px;
+        border: 1px solid #3b4f47;
+        background: #1b2a25;
+        color: var(--ink);
+      }
+      button {
+        margin-top: 6px;
+        background: var(--court);
+        border-color: transparent;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover { filter: brightness(1.08); }
+      #hint { margin: 10px 0 0; font-size: 13px; opacity: 0.6; text-align: center; }
+      #error { color: #ff9a8a; font-size: 13px; min-height: 1em; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <canvas id="game" width="1100" height="560"></canvas>
+      <div id="hud">
+        <div id="score"></div>
+        <div id="message"></div>
+      </div>
+      <div id="menu">
+        <form id="join">
+          <h1>Pickleball</h1>
+          <div>
+            <label for="name">Name</label>
+            <input id="name" maxlength="16" placeholder="Player" autocomplete="off" />
+          </div>
+          <div>
+            <label for="room">Room code</label>
+            <input id="room" maxlength="24" placeholder="court" autocomplete="off" />
+          </div>
+          <div>
+            <label for="mode">Mode</label>
+            <select id="mode">
+              <option value="singles">Singles (1v1)</option>
+              <option value="doubles">Doubles (2v2)</option>
+            </select>
+          </div>
+          <button type="submit">Join</button>
+          <div id="error"></div>
+          <p id="hint">Move with WASD or arrows · hold Shift to drive the ball</p>
+        </form>
+      </div>
+    </div>
+    <script type="module" src="/bundle.js"></script>
+  </body>
+</html>
