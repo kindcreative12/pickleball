@@ -4,7 +4,7 @@
 
 A browser-based, real-time multiplayer pickleball game. Agree on a room code, and you are playing — no account, no install, and no server to run.
 
-> **Status:** deployed but unplayed. It typechecks, builds, and serves, none of which proves a rally works. The first person to open it is running the first real test — expect bugs in the physics and the host handoff.
+> **Status:** playable. Confirmed working desktop-to-mobile over peer-to-peer. Rough edges remain — see [Not built yet](#not-built-yet).
 
 ## Playing
 
