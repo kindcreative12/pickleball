@@ -1,5 +1,5 @@
 import { joinRoom, selfId } from 'trystero';
-import { BROADCAST_HZ, TICK_DT, TICK_HZ } from '../shared/constants.js';
+import { BROADCAST_HZ, PROTOCOL_VERSION, TICK_DT, TICK_HZ } from '../shared/constants.js';
 import { Game } from '../shared/game.js';
 import type { ClientMessage, GameState, Input, Mode, ServerMessage } from '../shared/types.js';
 
@@ -70,9 +70,26 @@ function p2pTransport(o: TransportOptions): Transport {
   const inputAction = room.makeAction('input');
   const stateAction = room.makeAction('state');
 
+  /** What we announce to a peer on meeting them: who we are, and what we speak. */
+  const greeting = () => ({ name: o.name, v: PROTOCOL_VERSION });
+
   nameAction.onMessage = (data, ctx) => {
-    names.set(ctx.peerId, String(data));
-    if (isHost() && game) game.rename(ctx.peerId, String(data));
+    // An older build sends a bare string here rather than a greeting object,
+    // so anything unrecognised is treated as a version we cannot talk to.
+    const greet = data as { name?: unknown; v?: unknown } | string;
+    const version = typeof greet === 'object' && greet !== null ? greet.v : undefined;
+
+    if (version !== PROTOCOL_VERSION) {
+      o.onMessage({
+        t: 'error',
+        message: 'A player is on a different version. Both reload the page to play.',
+      });
+      return;
+    }
+
+    const name = String((greet as { name?: unknown }).name ?? 'Player');
+    names.set(ctx.peerId, name);
+    if (isHost() && game) game.rename(ctx.peerId, name);
   };
 
   inputAction.onMessage = (data, ctx) => {
@@ -124,7 +141,9 @@ function p2pTransport(o: TransportOptions): Transport {
   }
 
   room.onPeerJoin = (peerId) => {
-    void nameAction.send(o.name, { target: peerId });
+    void nameAction.send(greeting() as unknown as Parameters<typeof nameAction.send>[0], {
+      target: peerId,
+    });
     elect();
     if (isHost() && game) game.addPlayer(peerId, names.get(peerId) ?? 'Player');
   };

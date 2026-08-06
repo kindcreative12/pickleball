@@ -79,6 +79,14 @@ export const SERVE_DELAY = 1.2; // seconds between point won and next serve
 export const POINTS_TO_WIN = 11;
 export const WIN_BY = 2;
 
+/**
+ * Bumped whenever Input or GameState changes shape. Peers exchange it on
+ * connecting and refuse to play across a mismatch: without this they connect
+ * happily and then misread each other's messages, which looks like the game
+ * being broken rather than like two versions meeting.
+ */
+export const PROTOCOL_VERSION = 2;
+
 export const TICK_HZ = 60;
 export const BROADCAST_HZ = 30;
 export const TICK_DT = 1 / TICK_HZ;

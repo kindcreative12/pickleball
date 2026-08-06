@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-08-07
+
+### Fixed
+
+- The game claimed every mapped key globally, so W, A, S, D and space never reached the join form. Two people agreeing on a room code containing any of those letters each typed something different and landed in separate rooms, with nothing on screen to explain why they could not see each other. The default code is `court`, which contains none of them — which is why leaving the field blank always worked and typing a code did not.
+- Room codes are normalised identically on both transports, and the room actually joined is now shown during play, so a mismatch is visible rather than silent.
+
+### Changed
+
+- The bundle filename carries a content hash. Pages serves everything with a ten-minute cache and fetches the HTML and script separately, so a fixed name let a browser pair new HTML with a stale script — which in a peer-to-peer game means peers silently disagreeing about the wire format.
+- Peers exchange a protocol version on meeting and refuse to play across a mismatch, saying so plainly. Previously two versions connected happily and then misread each other, which looks like the game being broken rather than like two versions meeting.
+
 ## [0.3.0] — 2026-08-06
 
 ### Added
