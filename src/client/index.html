@@ -121,26 +121,32 @@
         background: rgba(255, 255, 255, 0.55);
         will-change: transform;
       }
-      #power {
+      #swings {
         position: absolute;
-        right: max(22px, env(safe-area-inset-right));
-        bottom: max(22px, env(safe-area-inset-bottom));
-        width: 108px;
-        height: 108px;
+        right: max(18px, env(safe-area-inset-right));
+        bottom: max(18px, env(safe-area-inset-bottom));
+        display: flex;
+        gap: 14px;
+        align-items: flex-end;
+      }
+      #swings button {
+        width: 96px;
+        height: 96px;
         border-radius: 50%;
         border: 2px solid rgba(255, 255, 255, 0.3);
-        background: rgba(47, 125, 91, 0.5);
         color: var(--ink);
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 650;
         letter-spacing: 0.04em;
         pointer-events: auto;
         touch-action: none;
       }
-      #power.on {
-        background: rgba(90, 200, 150, 0.85);
-        transform: scale(0.94);
-      }
+      /* Colour matches the telegraph drawn on the court, so a glance at an
+         opponent's cone reads the same as your own buttons. */
+      #slice { background: rgba(120, 200, 255, 0.4); }
+      #top { background: rgba(255, 140, 90, 0.4); }
+      #slice.on { background: rgba(120, 200, 255, 0.9); transform: scale(0.94); }
+      #top.on { background: rgba(255, 140, 90, 0.9); transform: scale(0.94); }
       #rotate {
         position: fixed;
         inset: 0;
@@ -184,7 +190,7 @@
           </div>
           <button type="submit">Join</button>
           <div id="error"></div>
-          <p id="hint">Move with WASD or arrows · hold Shift to drive the ball</p>
+          <p id="hint">WASD to move · hold Space (topspin) or Shift (slice) to wind up</p>
         </form>
       </div>
     </div>
@@ -192,7 +198,10 @@
     <div id="touch" hidden>
       <div id="stickzone"></div>
       <div id="stick"><div id="knob"></div></div>
-      <button id="power" type="button">POWER</button>
+      <div id="swings">
+        <button id="slice" type="button">SLICE</button>
+        <button id="top" type="button">TOP</button>
+      </div>
     </div>
 
     <div id="rotate"><p>Turn your phone sideways to play.</p></div>

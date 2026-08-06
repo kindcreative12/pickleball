@@ -17,14 +17,32 @@ Open the link above, pick a room code, and share that code with whoever you want
 **Desktop**
 
 - **WASD** or **arrow keys** — move
-- **Shift** (or **Space**) — drive the ball flatter and harder
+- **Space** — wind up with topspin · **Shift** — wind up with slice
 
 **Mobile** — controls appear once you join, in landscape
 
 - **Drag anywhere on the left half** — move. The stick materialises wherever your thumb lands, so there is nothing to aim for first.
-- **POWER button, bottom right** — hold to drive the ball
+- **TOP / SLICE buttons, bottom right** — hold to wind up
 
-Hitting is automatic when the ball comes within paddle reach; holding a direction as you strike aims the shot.
+## The swing
+
+Three things come out of two buttons:
+
+- **Which button** picks the spin. Topspin dips hard and kicks forward off the bounce, so you can swing bigger and still land it. Slice floats and sits up, which is awkward to attack.
+- **How long you hold** sets the power. The shot fires automatically when the ball reaches you — you are not timing a release, you are deciding how much to commit beforehand.
+- **The direction you were holding when you pressed** becomes the aim, and then it **locks**. You commit before you know where the ball will end up.
+
+**Letting go before the ball arrives is a feint.** The wind-up is lost and your paddle needs a moment, so bluffing costs something real.
+
+Not pressing anything still returns the ball as a soft dink, so nobody whiffs for doing nothing.
+
+### Reading your opponent
+
+Every wind-up is drawn on everyone's screen: a ring closing as it loads, tinted by spin, and a cone showing where the shot can go.
+
+The cone is honest — it is the shot's *actual* spray, not a hint. And it **narrows as the charge grows**. A quick poke is erratic but unreadable; a full swing is precise and plainly telegraphed. Power is paid for in information, which is what makes committing early, feinting, and baiting into real decisions.
+
+Taking the ball on your forehand is worth a little reach and power, so footwork earns you the better side.
 
 ## Developing
 

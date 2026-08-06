@@ -30,6 +30,51 @@ export const PADDLE_MAX_HEIGHT = 7;
 /** Seconds a player must wait between strikes. */
 export const HIT_COOLDOWN = 0.25;
 
+// --- swing ------------------------------------------------------------------
+
+/** Seconds of holding to reach a full wind-up. */
+export const CHARGE_TIME = 1.1;
+/** Speed of a shot at zero charge and at full charge. */
+export const SHOT_SPEED_MIN = 22;
+export const SHOT_SPEED_MAX = 38;
+/** Speed of the automatic dink played when nobody pressed anything. */
+export const DINK_SPEED = 16;
+/**
+ * How far either side of straight-ahead a shot can be aimed, in radians.
+ * Roughly 18°. Hitting a corner from the baseline only needs about 13°, so
+ * anything much wider is not an aim control — it is a way to miss the court.
+ */
+export const AIM_RANGE = 0.32;
+/** Nothing may leave the paddle at a sharper angle than this, spray included. */
+export const AIM_LIMIT = 0.5;
+
+/**
+ * Accuracy is the price of a quick swing. The shot lands somewhere inside a
+ * cone this wide, and everyone can see the cone — so a fast poke is erratic
+ * but unreadable, while a loaded smash is precise and obvious.
+ */
+export const AIM_SPREAD_MAX = 0.22;
+export const AIM_SPREAD_MIN = 0.03;
+
+/** Cost of pulling out of a swing, which is what makes a feint a real choice. */
+export const FEINT_RECOVERY = 0.18;
+
+/** Taking the ball on your forehand is worth footwork. */
+export const FOREHAND_POWER = 1.14;
+export const BACKHAND_POWER = 0.88;
+export const FOREHAND_REACH = 0.35;
+
+// --- spin -------------------------------------------------------------------
+
+/** Extra downward acceleration per unit of topspin — the Magnus effect. */
+export const MAGNUS = 24;
+/** Topspin skids forward off the bounce; backspin checks up. */
+export const SPIN_KICK = 0.26;
+export const SPIN_SIT = 0.3;
+/** Fraction of spin shed per second in flight, and kept through a bounce. */
+export const SPIN_DECAY = 0.5;
+export const SPIN_BOUNCE_KEEP = 0.45;
+
 export const SERVE_DELAY = 1.2; // seconds between point won and next serve
 export const POINTS_TO_WIN = 11;
 export const WIN_BY = 2;

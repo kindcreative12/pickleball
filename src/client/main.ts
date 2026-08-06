@@ -4,7 +4,15 @@ import {
   KITCHEN_DEPTH,
   NET_X,
 } from '../shared/constants.js';
-import type { ClientMessage, GameState, Input, Mode, Side } from '../shared/types.js';
+import type {
+  ClientMessage,
+  GameState,
+  Input,
+  Mode,
+  PlayerState,
+  Side,
+  Spin,
+} from '../shared/types.js';
 import { createTransport, type Transport } from './transport.js';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -35,7 +43,14 @@ let state: GameState | null = null;
 const TRANSPORT: 'ws' | 'p2p' =
   new URLSearchParams(location.search).get('transport') === 'ws' ? 'ws' : 'p2p';
 
-const input: Input = { up: false, down: false, left: false, right: false, power: false };
+const input: Input = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  chargeTop: false,
+  chargeSlice: false,
+};
 
 // --- input ------------------------------------------------------------------
 
@@ -48,9 +63,12 @@ const KEYS: Record<string, keyof Input> = {
   ArrowLeft: 'left',
   KeyD: 'right',
   ArrowRight: 'right',
-  ShiftLeft: 'power',
-  ShiftRight: 'power',
-  Space: 'power',
+  // Two swing buttons: which one you press chooses the spin.
+  Space: 'chargeTop',
+  KeyJ: 'chargeTop',
+  ShiftLeft: 'chargeSlice',
+  ShiftRight: 'chargeSlice',
+  KeyK: 'chargeSlice',
 };
 
 function setKey(code: string, down: boolean): void {
@@ -82,7 +100,8 @@ const touchLayer = document.getElementById('touch') as HTMLDivElement;
 const stickZone = document.getElementById('stickzone') as HTMLDivElement;
 const stick = document.getElementById('stick') as HTMLDivElement;
 const knob = document.getElementById('knob') as HTMLDivElement;
-const powerBtn = document.getElementById('power') as HTMLButtonElement;
+const topBtn = document.getElementById('top') as HTMLButtonElement;
+const sliceBtn = document.getElementById('slice') as HTMLButtonElement;
 const hint = document.getElementById('hint') as HTMLParagraphElement;
 
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -149,29 +168,35 @@ function releaseStick(e: PointerEvent): void {
 stickZone.addEventListener('pointerup', releaseStick);
 stickZone.addEventListener('pointercancel', releaseStick);
 
-function setPower(on: boolean): void {
-  input.power = on;
-  powerBtn.classList.toggle('on', on);
+function setCharge(which: 'chargeTop' | 'chargeSlice', on: boolean): void {
+  input[which] = on;
+  (which === 'chargeTop' ? topBtn : sliceBtn).classList.toggle('on', on);
 }
 
-powerBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  powerBtn.setPointerCapture(e.pointerId);
-  setPower(true);
-});
-powerBtn.addEventListener('pointerup', () => setPower(false));
-powerBtn.addEventListener('pointercancel', () => setPower(false));
+function bindSwing(button: HTMLButtonElement, which: 'chargeTop' | 'chargeSlice'): void {
+  button.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    button.setPointerCapture(e.pointerId);
+    setCharge(which, true);
+  });
+  button.addEventListener('pointerup', () => setCharge(which, false));
+  button.addEventListener('pointercancel', () => setCharge(which, false));
+}
+
+bindSwing(topBtn, 'chargeTop');
+bindSwing(sliceBtn, 'chargeSlice');
 
 // Backgrounding the tab mid-hold would otherwise leave keys stuck down.
 addEventListener('visibilitychange', () => {
   if (document.hidden) {
     clearMovement();
-    setPower(false);
+    setCharge('chargeTop', false);
+    setCharge('chargeSlice', false);
   }
 });
 
 if (isTouch) {
-  hint.textContent = 'Drag anywhere on the left to move · hold POWER to drive the ball';
+  hint.textContent = 'Drag left to move · hold TOP or SLICE to wind up, release early to feint';
 }
 
 // --- connection -------------------------------------------------------------
@@ -219,8 +244,10 @@ function draw(): void {
   drawCourt();
 
   if (state) {
+    // Telegraphs sit under the players so a crowded net does not hide them.
+    for (const p of state.players) drawTelegraph(p);
     for (const p of state.players) drawPlayer(p.x, p.y, p.side, p.id === selfId, p.name);
-    drawBall(state.ball.x, state.ball.y, state.ball.z);
+    drawBall(state.ball.x, state.ball.y, state.ball.z, state.ball.spin);
     scoreBox.textContent = `${state.score.left} — ${state.score.right}`;
     messageBox.textContent = state.message;
   }
@@ -261,6 +288,42 @@ function line(x1: number, y1: number, x2: number, y2: number): void {
   ctx.stroke();
 }
 
+const SPIN_INK: Record<Spin, string> = { top: '255,140,90', slice: '120,200,255' };
+
+/**
+ * A wind-up is public. The cone is where the shot can actually go, so it is an
+ * honest reading rather than a hint: wide while the swing is quick and erratic,
+ * narrowing as it loads into something precise and dangerous. Reading one is
+ * the whole game — you are choosing whether to commit to covering it.
+ */
+function drawTelegraph(p: PlayerState): void {
+  if (p.charge === undefined || p.aim === undefined || p.spin === undefined) return;
+
+  const ink = SPIN_INK[p.spin];
+  const dirX = p.side === 'left' ? 1 : -1;
+  // Shot velocity is (dirX·cos, sin), so the on-screen heading is that vector.
+  const heading = Math.atan2(Math.sin(p.aim), dirX * Math.cos(p.aim));
+  const spread = p.aimSpread ?? 0;
+  const reach = (7 + 20 * p.charge) * SCALE;
+  const cx = px(p.x);
+  const cy = py(p.y);
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, reach, heading - spread, heading + spread);
+  ctx.closePath();
+  ctx.fillStyle = `rgba(${ink},${0.1 + 0.14 * p.charge})`;
+  ctx.fill();
+
+  // A ring that closes as the swing loads.
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.6 * SCALE, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * p.charge);
+  ctx.strokeStyle = `rgba(${ink},0.95)`;
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.lineWidth = 2;
+}
+
 function drawPlayer(x: number, y: number, side: Side, isSelf: boolean, name: string): void {
   const r = 0.9 * SCALE;
   ctx.beginPath();
@@ -285,7 +348,7 @@ function drawPlayer(x: number, y: number, side: Side, isSelf: boolean, name: str
  * Height is the one thing a top-down camera cannot show directly, so the ball
  * lifts away from a shadow that stays on the ground and tightens as it rises.
  */
-function drawBall(x: number, y: number, z: number): void {
+function drawBall(x: number, y: number, z: number, spin: number): void {
   const shadowX = px(x);
   const shadowY = py(y);
   const lift = z * SCALE * 0.38;
@@ -299,8 +362,15 @@ function drawBall(x: number, y: number, z: number): void {
   ctx.arc(shadowX, shadowY - lift, (0.3 + z * 0.012) * SCALE, 0, Math.PI * 2);
   ctx.fillStyle = '#f5e663';
   ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  // Rim carries the spin, so you can read what is coming before it bounces.
+  const carrying = Math.min(1, Math.abs(spin));
+  ctx.strokeStyle =
+    carrying < 0.05
+      ? 'rgba(0,0,0,0.25)'
+      : `rgba(${SPIN_INK[spin > 0 ? 'top' : 'slice']},${0.35 + 0.6 * carrying})`;
+  ctx.lineWidth = 1 + 2 * carrying;
   ctx.stroke();
+  ctx.lineWidth = 2;
 }
 
 draw();

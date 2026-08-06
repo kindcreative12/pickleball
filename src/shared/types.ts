@@ -1,5 +1,6 @@
 export type Side = 'left' | 'right';
 export type Mode = 'singles' | 'doubles';
+export type Spin = 'top' | 'slice';
 
 /** What a client reports each tick. Intent only — never positions. */
 export interface Input {
@@ -7,8 +8,13 @@ export interface Input {
   down: boolean;
   left: boolean;
   right: boolean;
-  /** Held to hit flatter and harder at the cost of accuracy. */
-  power: boolean;
+  /**
+   * The two swing buttons. Which one you press picks the spin, how long you
+   * hold it sets the power, and the direction you were holding when you
+   * pressed becomes the shot's aim. Releasing before contact is a feint.
+   */
+  chargeTop: boolean;
+  chargeSlice: boolean;
 }
 
 export interface PlayerState {
@@ -17,12 +23,28 @@ export interface PlayerState {
   side: Side;
   x: number;
   y: number;
+  /**
+   * Wind-up, broadcast so opponents can read it and react. Absent when the
+   * player is not charging.
+   */
+  charge?: number; // 0..1
+  spin?: Spin;
+  /** Locked shot direction, in radians of world heading. */
+  aim?: number;
+  /**
+   * Half-width of the cone the shot may actually land within. It is real
+   * inaccuracy, not a display trick: a quick poke sprays and is unreadable,
+   * a full wind-up is precise and plainly telegraphed.
+   */
+  aimSpread?: number;
 }
 
 export interface BallState {
   x: number;
   y: number;
   z: number;
+  /** Positive is topspin, negative is backspin. */
+  spin: number;
 }
 
 export type Phase = 'waiting' | 'serving' | 'rally' | 'point' | 'gameover';

@@ -1,13 +1,24 @@
 import {
+  AIM_LIMIT,
+  AIM_RANGE,
+  AIM_SPREAD_MAX,
+  AIM_SPREAD_MIN,
   AIR_DRAG,
+  BACKHAND_POWER,
   BALL_RADIUS,
   BOUNCE_RESTITUTION,
+  CHARGE_TIME,
   COURT_LENGTH,
   COURT_WIDTH,
+  DINK_SPEED,
+  FEINT_RECOVERY,
+  FOREHAND_POWER,
+  FOREHAND_REACH,
   GRAVITY,
   GROUND_FRICTION,
   HIT_COOLDOWN,
   KITCHEN_DEPTH,
+  MAGNUS,
   NET_HEIGHT,
   NET_X,
   PADDLE_MAX_HEIGHT,
@@ -15,11 +26,33 @@ import {
   PLAYER_SPEED,
   POINTS_TO_WIN,
   SERVE_DELAY,
+  SHOT_SPEED_MAX,
+  SHOT_SPEED_MIN,
+  SPIN_BOUNCE_KEEP,
+  SPIN_DECAY,
+  SPIN_KICK,
+  SPIN_SIT,
   WIN_BY,
 } from './constants.js';
-import type { GameState, Input, Mode, Phase, Side } from './types.js';
+import type { GameState, Input, Mode, Phase, Side, Spin } from './types.js';
 
-const NO_INPUT: Input = { up: false, down: false, left: false, right: false, power: false };
+const NO_INPUT: Input = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  chargeTop: false,
+  chargeSlice: false,
+};
+
+/** A swing in progress. Aim and spray are fixed the moment it begins. */
+interface Charge {
+  spin: Spin;
+  held: number;
+  aim: number;
+  /** Where inside the spray cone this particular shot will actually go. */
+  stray: number;
+}
 
 interface Player {
   id: string;
@@ -29,6 +62,9 @@ interface Player {
   y: number;
   input: Input;
   cooldown: number;
+  charge: Charge | null;
+  /** Previous frame's button state, so the host can find the rising edge itself. */
+  swingHeld: boolean;
 }
 
 interface Ball {
@@ -38,6 +74,7 @@ interface Ball {
   vx: number;
   vy: number;
   vz: number;
+  spin: number;
 }
 
 const other = (side: Side): Side => (side === 'left' ? 'right' : 'left');
@@ -52,7 +89,7 @@ export class Game {
   readonly capacity: number;
 
   private players: Player[] = [];
-  private ball: Ball = { x: NET_X, y: COURT_WIDTH / 2, z: 0, vx: 0, vy: 0, vz: 0 };
+  private ball: Ball = { x: NET_X, y: COURT_WIDTH / 2, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
   private phase: Phase = 'waiting';
   private score: Record<Side, number> = { left: 0, right: 0 };
   private serving: Side = 'left';
@@ -93,6 +130,8 @@ export class Game {
       y: 0,
       input: { ...NO_INPUT },
       cooldown: 0,
+      charge: null,
+      swingHeld: false,
     };
     this.players.push(player);
     this.placeForServe(player);
@@ -125,6 +164,7 @@ export class Game {
   step(dt: number): void {
     for (const p of this.players) {
       p.cooldown = Math.max(0, p.cooldown - dt);
+      this.updateCharge(p, dt);
       this.movePlayer(p, dt);
     }
 
@@ -156,14 +196,31 @@ export class Game {
   toState(): GameState {
     return {
       phase: this.phase,
-      players: this.players.map((p) => ({
-        id: p.id,
-        name: p.name,
-        side: p.side,
-        x: round(p.x),
-        y: round(p.y),
-      })),
-      ball: { x: round(this.ball.x), y: round(this.ball.y), z: round(this.ball.z) },
+      players: this.players.map((p) => {
+        const t = p.charge ? p.charge.held / CHARGE_TIME : 0;
+        return {
+          id: p.id,
+          name: p.name,
+          side: p.side,
+          x: round(p.x),
+          y: round(p.y),
+          // A wind-up is public information — that is the whole point.
+          ...(p.charge
+            ? {
+                charge: round(t),
+                spin: p.charge.spin,
+                aim: round(p.charge.aim),
+                aimSpread: round(spreadFor(t)),
+              }
+            : {}),
+        };
+      }),
+      ball: {
+        x: round(this.ball.x),
+        y: round(this.ball.y),
+        z: round(this.ball.z),
+        spin: round(this.ball.spin),
+      },
       score: { ...this.score },
       serving: this.serving,
       message: this.message,
@@ -188,6 +245,45 @@ export class Game {
     p.y = clamp(p.y, -4, COURT_WIDTH + 4);
   }
 
+  // --- swing ----------------------------------------------------------------
+
+  /**
+   * Charge is timed here, from the stream of button states, rather than trusted
+   * from the client — otherwise a peer could simply claim a full wind-up. The
+   * cost is that a remote player's charge begins one network trip late, which
+   * their own client hides by drawing its own ring from local input.
+   */
+  private updateCharge(p: Player, dt: number): void {
+    const held = p.input.chargeTop || p.input.chargeSlice;
+
+    if (held && !p.swingHeld && !p.charge) {
+      // Aim is taken from where they were pushing at this instant and then
+      // frozen: you commit before you know where the ball will end up.
+      const lateral = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
+      p.charge = {
+        spin: p.input.chargeTop ? 'top' : 'slice',
+        held: 0,
+        aim: lateral * AIM_RANGE,
+        stray: Math.random() * 2 - 1,
+      };
+    } else if (held && p.charge) {
+      p.charge.held = Math.min(CHARGE_TIME, p.charge.held + dt);
+    } else if (!held && p.charge) {
+      // Let go before the ball arrived — a feint. The wind-up is lost and the
+      // paddle needs a moment, so bluffing costs something.
+      p.charge = null;
+      p.cooldown = Math.max(p.cooldown, FEINT_RECOVERY);
+    }
+
+    p.swingHeld = held;
+  }
+
+  /** Two right-handers facing each other have forehands on opposite flanks. */
+  private isForehand(p: Player): boolean {
+    const offset = this.ball.y - p.y;
+    return p.side === 'left' ? offset >= 0 : offset <= 0;
+  }
+
   // --- ball -----------------------------------------------------------------
 
   private stepBall(dt: number): void {
@@ -198,7 +294,10 @@ export class Game {
     b.vx *= drag;
     b.vy *= drag;
 
-    b.vz -= GRAVITY * dt;
+    // Magnus: topspin drags the ball down, which is what lets you swing hard
+    // and still land it. Backspin holds it up and floats.
+    b.vz -= (GRAVITY + MAGNUS * b.spin) * dt;
+    b.spin *= Math.max(0, 1 - SPIN_DECAY * dt);
     b.x += b.vx * dt;
     b.y += b.vy * dt;
     b.z += b.vz * dt;
@@ -215,10 +314,17 @@ export class Game {
 
     if (b.z <= BALL_RADIUS && b.vz < 0) {
       b.z = BALL_RADIUS;
-      b.vz = -b.vz * BOUNCE_RESTITUTION;
-      const keep = Math.pow(GROUND_FRICTION, dt * 60);
+
+      // Spin trades height for length. Topspin kicks through low and fast;
+      // backspin checks up and sits, which is what makes a slice awkward to
+      // attack.
+      const sit = clamp(1 - SPIN_SIT * b.spin, 0.45, 1.6);
+      const kick = clamp(1 + SPIN_KICK * b.spin, 0.6, 1.5);
+      b.vz = -b.vz * BOUNCE_RESTITUTION * sit;
+      const keep = Math.pow(GROUND_FRICTION, dt * 60) * kick;
       b.vx *= keep;
       b.vy *= keep;
+      b.spin *= SPIN_BOUNCE_KEEP;
       this.onBounce();
     }
   }
@@ -262,8 +368,9 @@ export class Game {
       if (p.id === this.lastHitBy && this.bouncesSinceHit === 0) continue;
       if (b.z > PADDLE_MAX_HEIGHT) continue;
 
+      const reach = PADDLE_REACH + (this.isForehand(p) ? FOREHAND_REACH : 0);
       const d = Math.hypot(p.x - b.x, p.y - b.y);
-      if (d < PADDLE_REACH && d < bestDist) {
+      if (d < reach && d < bestDist) {
         best = p;
         bestDist = d;
       }
@@ -289,15 +396,35 @@ export class Game {
       return;
     }
 
+    const charge = p.charge;
+    const t = charge ? charge.held / CHARGE_TIME : 0;
     const dirX = p.side === 'left' ? 1 : -1;
-    const speed = p.input.power ? 34 : 26;
-    const aimBias = (p.input.down ? 1 : 0) - (p.input.up ? 1 : 0);
-    const vy = clamp((b.y - p.y) * 3 + aimBias * 6, -15, 15);
 
-    b.vx = dirX * speed;
-    b.vy = vy;
-    b.vz = this.loftToClearNet(speed, p.input.power ? 0.5 : 1.3);
+    // Reaching for a backhand costs you power; earning a forehand pays.
+    const hand = this.isForehand(p) ? FOREHAND_POWER : BACKHAND_POWER;
+    const speed = (charge ? SHOT_SPEED_MIN + (SHOT_SPEED_MAX - SHOT_SPEED_MIN) * t : DINK_SPEED) * hand;
 
+    // Where it actually goes: the locked aim, plus however far inside the
+    // spray cone this swing happened to land. A full wind-up barely strays.
+    const aim = charge
+      ? clamp(charge.aim + charge.stray * spreadFor(t), -AIM_LIMIT, AIM_LIMIT)
+      : clamp((b.y - p.y) * 0.12, -AIM_RANGE, AIM_RANGE);
+
+    const spin = charge ? (charge.spin === 'top' ? 1 : -1) * (0.4 + 0.6 * t) : 0;
+
+    b.vx = dirX * speed * Math.cos(aim);
+    b.vy = speed * Math.sin(aim);
+    b.spin = spin;
+    // A loaded swing drives deep; an uncharged tap drops short, which is what
+    // makes it a dink rather than a weak drive.
+    const depth = charge ? 0.5 + 0.32 * t : 0.34;
+    b.vz = this.launchToLand(
+      this.targetDepth(p.side, depth),
+      Math.abs(b.vx),
+      GRAVITY + MAGNUS * spin,
+    );
+
+    p.charge = null;
     p.cooldown = HIT_COOLDOWN;
     this.lastHitBy = p.id;
     this.lastHitSide = p.side;
@@ -305,13 +432,43 @@ export class Game {
     this.shotsThisRally += 1;
   }
 
-  /** Vertical velocity that puts the ball `margin` feet over the net. */
-  private loftToClearNet(speed: number, margin: number): number {
+  /**
+   * Vertical velocity that lands the ball at `targetX`, lofting higher only if
+   * the net would otherwise stop it.
+   *
+   * Solving purely for net clearance is what the earlier version did, and it
+   * fails badly up close: asked to clear a 3ft net from 3ft away, it returns a
+   * near-vertical launch that then carries the ball forty feet past the
+   * baseline. Aiming at a landing spot first keeps shots on the court.
+   */
+  private launchToLand(targetX: number, horizontalSpeed: number, gravity = GRAVITY): number {
     const b = this.ball;
-    const dist = Math.abs(NET_X - b.x);
-    const t = Math.max(0.05, dist / speed);
-    const vz = (NET_HEIGHT + margin - b.z + 0.5 * GRAVITY * t * t) / t;
-    return clamp(vz, 4, 24);
+    const speed = Math.max(1, horizontalSpeed);
+    const flight = Math.max(0.08, Math.abs(targetX - b.x) / speed);
+    let vz = (0.5 * gravity * flight * flight - b.z) / flight;
+
+    const toNet = Math.abs(NET_X - b.x);
+    if (toNet > 0.01) {
+      const atNet = toNet / speed;
+      const height = b.z + vz * atNet - 0.5 * gravity * atNet * atNet;
+      const needed = NET_HEIGHT + 0.35;
+      if (height < needed) {
+        vz = (needed - b.z + 0.5 * gravity * atNet * atNet) / atNet;
+      }
+    }
+
+    // Downward launches must stay available: a ball standing above net height
+    // is exactly the one you want to hit down through the court, and clamping
+    // to positive vz would quietly make the smash impossible. The net check
+    // above is what stops this from simply burying the ball in the tape.
+    return clamp(vz, -22, 34);
+  }
+
+  /** Where a shot should land: harder swings are driven deeper. */
+  private targetDepth(side: Side, fraction: number): number {
+    return side === 'left'
+      ? NET_X + fraction * (COURT_LENGTH - NET_X)
+      : NET_X - fraction * NET_X;
   }
 
   private inKitchen(p: Player): boolean {
@@ -335,7 +492,8 @@ export class Game {
     const speed = 22;
     b.vx = dirX * speed;
     b.vy = clamp((COURT_WIDTH / 2 - server.y) * 0.8, -6, 6);
-    b.vz = this.loftToClearNet(speed, 2.4);
+    b.spin = 0;
+    b.vz = this.launchToLand(this.targetDepth(this.serving, 0.55), speed);
 
     this.phase = 'rally';
     this.message = '';
@@ -355,7 +513,14 @@ export class Game {
     this.phase = 'serving';
     this.timer = SERVE_DELAY;
     this.message = `${side === 'left' ? 'Left' : 'Right'} to serve`;
-    for (const p of this.players) this.placeForServe(p);
+    for (const p of this.players) {
+      // Drop any wind-up carried over from the last point, but re-arm the edge
+      // detector: a player still holding the button expects to start charging
+      // again, not to be locked out until they let go.
+      p.charge = null;
+      p.swingHeld = false;
+      this.placeForServe(p);
+    }
   }
 
   private placeForServe(p: Player): void {
@@ -374,7 +539,7 @@ export class Game {
 
   private awardPoint(side: Side, reason: string): void {
     this.score[side] += 1;
-    this.ball.vx = this.ball.vy = this.ball.vz = 0;
+    this.ball.vx = this.ball.vy = this.ball.vz = this.ball.spin = 0;
 
     const mine = this.score[side];
     const theirs = this.score[other(side)];
@@ -392,3 +557,10 @@ export class Game {
 }
 
 const round = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * How wide the shot may stray, as a function of wind-up. Wide and unreadable
+ * when quick, tight and telegraphed when loaded — power is paid for in
+ * information.
+ */
+const spreadFor = (t: number) => AIM_SPREAD_MAX + (AIM_SPREAD_MIN - AIM_SPREAD_MAX) * t;

@@ -5,7 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] — 2026-08-06
+## [0.3.0] — 2026-08-06
+
+### Added
+
+- Charged swings. Two buttons replace the single power key: which one you press picks the spin, how long you hold sets the power, and the direction held at the moment of pressing becomes the aim — which then locks, so you commit before knowing where the ball will end up. The shot fires at contact rather than on release, because timing a release across a network would have handed the zero-latency host a decisive advantage rather than merely an annoying one.
+- Feints. Releasing before contact cancels the swing and costs a moment of recovery, so bluffing is a real choice rather than free.
+- Topspin and slice, as Magnus force in flight and as spin-dependent bounce: topspin dips and skids forward, slice floats and sits up.
+- Forehand and backhand, derived from where the ball is rather than bound to a button, worth a little reach and power. Footwork earns the better side.
+- Wind-ups are broadcast and drawn for everyone: a closing ring tinted by spin, plus a cone showing the shot's real spray. The cone narrows as the charge grows, so power is paid for in information — which is what makes committing, feinting and baiting worth anything.
+
+### Fixed
+
+- Shots aimed only to clear the net, never to land. Struck from near the net that solved to a near-vertical launch which then carried the ball forty feet past the baseline; shots now target a landing point and loft higher only when the net demands it.
+- Vertical launch was clamped positive, so a ball standing above net height could not be hit downward — quietly making the smash impossible.
+- Holding a swing button through the end of a point locked the player out of ever charging again, because the rising-edge detector never re-armed.
+
+### Changed
+
+- Aim range narrowed to about 18°. Reaching a corner from the baseline needs roughly 13°, so the previous 49° was less an aim control than a way to miss the court.
 
 ### Added
 
