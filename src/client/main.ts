@@ -75,6 +75,104 @@ setInterval(() => {
   send({ t: 'input', input });
 }, 1000 / 30);
 
+// --- touch controls ---------------------------------------------------------
+
+const touchLayer = document.getElementById('touch') as HTMLDivElement;
+const stickZone = document.getElementById('stickzone') as HTMLDivElement;
+const stick = document.getElementById('stick') as HTMLDivElement;
+const knob = document.getElementById('knob') as HTMLDivElement;
+const powerBtn = document.getElementById('power') as HTMLButtonElement;
+const hint = document.getElementById('hint') as HTMLParagraphElement;
+
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+
+/** How far the knob travels from the origin, in CSS pixels. */
+const STICK_RADIUS = 58;
+/** Fraction of that travel that must be exceeded before a direction registers. */
+const DEADZONE = 0.3;
+
+let stickPointer: number | null = null;
+let stickOrigin = { x: 0, y: 0 };
+
+function clearMovement(): void {
+  input.up = input.down = input.left = input.right = false;
+}
+
+/**
+ * The stick is analog but Input is boolean, matching the keyboard. Crossing the
+ * deadzone on both axes at once yields a diagonal, exactly as holding two keys does.
+ */
+function applyStick(dx: number, dy: number): void {
+  const dist = Math.hypot(dx, dy);
+  const scale = dist > STICK_RADIUS ? STICK_RADIUS / dist : 1;
+  const kx = dx * scale;
+  const ky = dy * scale;
+  knob.style.transform = `translate(${kx}px, ${ky}px)`;
+
+  const nx = kx / STICK_RADIUS;
+  const ny = ky / STICK_RADIUS;
+  input.left = nx < -DEADZONE;
+  input.right = nx > DEADZONE;
+  input.up = ny < -DEADZONE;
+  input.down = ny > DEADZONE;
+}
+
+// The stick appears wherever the thumb lands rather than at a fixed spot, so
+// there is nothing to aim for before you can start moving.
+stickZone.addEventListener('pointerdown', (e) => {
+  if (stickPointer !== null) return;
+  e.preventDefault();
+  stickPointer = e.pointerId;
+  stickZone.setPointerCapture(e.pointerId);
+  stickOrigin = { x: e.clientX, y: e.clientY };
+  stick.style.left = `${e.clientX}px`;
+  stick.style.top = `${e.clientY}px`;
+  stick.style.opacity = '1';
+  applyStick(0, 0);
+});
+
+stickZone.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== stickPointer) return;
+  e.preventDefault();
+  applyStick(e.clientX - stickOrigin.x, e.clientY - stickOrigin.y);
+});
+
+function releaseStick(e: PointerEvent): void {
+  if (e.pointerId !== stickPointer) return;
+  stickPointer = null;
+  stick.style.opacity = '0';
+  knob.style.transform = 'translate(0px, 0px)';
+  clearMovement();
+}
+
+stickZone.addEventListener('pointerup', releaseStick);
+stickZone.addEventListener('pointercancel', releaseStick);
+
+function setPower(on: boolean): void {
+  input.power = on;
+  powerBtn.classList.toggle('on', on);
+}
+
+powerBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  powerBtn.setPointerCapture(e.pointerId);
+  setPower(true);
+});
+powerBtn.addEventListener('pointerup', () => setPower(false));
+powerBtn.addEventListener('pointercancel', () => setPower(false));
+
+// Backgrounding the tab mid-hold would otherwise leave keys stuck down.
+addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    clearMovement();
+    setPower(false);
+  }
+});
+
+if (isTouch) {
+  hint.textContent = 'Drag anywhere on the left to move · hold POWER to drive the ball';
+}
+
 // --- connection -------------------------------------------------------------
 
 form.addEventListener('submit', (e) => {
@@ -93,6 +191,7 @@ function connect(name: string, room: string, mode: Mode): void {
   socket.addEventListener('open', () => send({ t: 'join', room, name, mode }));
   socket.addEventListener('close', () => {
     menu.style.display = 'grid';
+    touchLayer.hidden = true;
     errorBox.textContent = 'Disconnected';
   });
   socket.addEventListener('message', (event) => {
@@ -101,6 +200,7 @@ function connect(name: string, room: string, mode: Mode): void {
       selfId = msg.id;
       selfSide = msg.side;
       menu.style.display = 'none';
+      if (isTouch) touchLayer.hidden = false;
     } else if (msg.t === 'state') {
       state = msg.state;
     } else if (msg.t === 'error') {

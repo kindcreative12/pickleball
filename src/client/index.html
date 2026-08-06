@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>Pickleball</title>
     <style>
       :root {
@@ -11,19 +12,27 @@
         --ink: #f2f5f4;
       }
       * { box-sizing: border-box; }
+      html, body {
+        overscroll-behavior: none;
+        touch-action: manipulation;
+      }
       body {
         margin: 0;
-        min-height: 100vh;
+        min-height: 100dvh;
         display: grid;
         place-items: center;
         background: #14201c;
         color: var(--ink);
         font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
       }
       #wrap { position: relative; }
       canvas {
         display: block;
-        width: min(96vw, 1100px);
+        /* Keep the court fully on screen in landscape without overflowing the
+           viewport height. 1.96 is the canvas aspect ratio. */
+        width: min(96vw, 1100px, calc(88dvh * 1.96));
         height: auto;
         border-radius: 10px;
         background: #14201c;
@@ -38,7 +47,7 @@
         font-variant-numeric: tabular-nums;
       }
       #score { font-size: 26px; font-weight: 650; letter-spacing: 0.02em; }
-      #message { opacity: 0.85; }
+      #message { opacity: 0.85; text-align: right; }
       #menu {
         position: absolute;
         inset: 0;
@@ -46,6 +55,7 @@
         place-items: center;
         background: rgba(10, 18, 15, 0.88);
         border-radius: 10px;
+        z-index: 20;
       }
       form {
         display: grid;
@@ -56,22 +66,95 @@
       label { font-size: 13px; opacity: 0.75; }
       input, select, button {
         font: inherit;
+        /* 16px keeps iOS Safari from zooming the page on focus. */
+        font-size: 16px;
         padding: 9px 11px;
         border-radius: 7px;
         border: 1px solid #3b4f47;
         background: #1b2a25;
         color: var(--ink);
       }
-      button {
+      form button {
         margin-top: 6px;
         background: var(--court);
         border-color: transparent;
         font-weight: 600;
         cursor: pointer;
       }
-      button:hover { filter: brightness(1.08); }
+      form button:hover { filter: brightness(1.08); }
       #hint { margin: 10px 0 0; font-size: 13px; opacity: 0.6; text-align: center; }
       #error { color: #ff9a8a; font-size: 13px; min-height: 1em; }
+
+      /* --- touch controls --- */
+      #touch {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+        touch-action: none;
+      }
+      #touch[hidden] { display: none; }
+      #stickzone {
+        position: absolute;
+        inset: 0 45% 0 0;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      #stick {
+        position: fixed;
+        width: 132px;
+        height: 132px;
+        margin: -66px 0 0 -66px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.07);
+        opacity: 0;
+        transition: opacity 120ms ease;
+        pointer-events: none;
+        display: grid;
+        place-items: center;
+      }
+      #knob {
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.55);
+        will-change: transform;
+      }
+      #power {
+        position: absolute;
+        right: max(22px, env(safe-area-inset-right));
+        bottom: max(22px, env(safe-area-inset-bottom));
+        width: 108px;
+        height: 108px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: rgba(47, 125, 91, 0.5);
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      #power.on {
+        background: rgba(90, 200, 150, 0.85);
+        transform: scale(0.94);
+      }
+      #rotate {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: none;
+        place-items: center;
+        text-align: center;
+        padding: 24px;
+        background: #14201c;
+      }
+      /* Portrait on a touch device leaves the court unreadably small. */
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate { display: grid; }
+      }
     </style>
   </head>
   <body>
@@ -105,6 +188,15 @@
         </form>
       </div>
     </div>
+
+    <div id="touch" hidden>
+      <div id="stickzone"></div>
+      <div id="stick"><div id="knob"></div></div>
+      <button id="power" type="button">POWER</button>
+    </div>
+
+    <div id="rotate"><p>Turn your phone sideways to play.</p></div>
+
     <script type="module" src="/bundle.js"></script>
   </body>
 </html>

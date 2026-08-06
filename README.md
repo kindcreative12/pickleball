@@ -2,7 +2,7 @@
 
 A browser-based, real-time multiplayer pickleball game. Friends join by opening a link and typing the same room code — nothing to install.
 
-> **Status:** initial scaffold. The full game loop is written but has not yet been run end-to-end, so expect the first session to be about fixing what the physics actually does versus what it was meant to do.
+> **Status:** early. It typechecks and bundles cleanly, but the server has not yet been run end-to-end, so expect some time spent on what the physics actually does versus what it was meant to do.
 
 ## Running it
 
@@ -24,9 +24,17 @@ Set `PORT` to serve somewhere other than 3000.
 
 ## Controls
 
+**Desktop**
+
 - **WASD** or **arrow keys** — move
 - **Shift** (or **Space**) — drive the ball flatter and harder
-- Hitting is automatic when the ball comes within paddle reach; holding a direction as you strike aims the shot
+
+**Mobile** — controls appear once you join, in landscape
+
+- **Drag anywhere on the left half** — move. The stick materialises wherever your thumb lands, so there is nothing to aim for first.
+- **POWER button, bottom right** — hold to drive the ball
+
+Hitting is automatic when the ball comes within paddle reach; holding a direction as you strike aims the shot.
 
 ## How it fits together
 
