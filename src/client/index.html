@@ -48,6 +48,15 @@
       }
       #score { font-size: 26px; font-weight: 650; letter-spacing: 0.02em; }
       #message { opacity: 0.85; text-align: right; }
+      #roomtag {
+        position: absolute;
+        left: 12px;
+        bottom: 10px;
+        font-size: 13px;
+        letter-spacing: 0.04em;
+        opacity: 0.65;
+        pointer-events: none;
+      }
       #menu {
         position: absolute;
         inset: 0;
@@ -170,6 +179,9 @@
         <div id="score"></div>
         <div id="message"></div>
       </div>
+      <!-- Shown during play: two people who typed different codes need to be
+           able to see that, rather than staring at an empty court. -->
+      <div id="roomtag"></div>
       <div id="menu">
         <form id="join">
           <h1>Pickleball</h1>

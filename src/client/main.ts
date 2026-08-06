@@ -22,6 +22,7 @@ const form = document.getElementById('join') as HTMLFormElement;
 const errorBox = document.getElementById('error') as HTMLDivElement;
 const scoreBox = document.getElementById('score') as HTMLDivElement;
 const messageBox = document.getElementById('message') as HTMLDivElement;
+const roomTag = document.getElementById('roomtag') as HTMLDivElement;
 
 const MARGIN = 46;
 const SCALE = (canvas.width - MARGIN * 2) / COURT_LENGTH;
@@ -77,10 +78,29 @@ function setKey(code: string, down: boolean): void {
   input[key] = down;
 }
 
+/**
+ * WASD are movement keys and also ordinary letters. While the join form has
+ * focus they have to stay letters, or a name containing one of them cannot be
+ * typed — the game would swallow the keystroke before the field ever saw it.
+ */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  return (
+    el.tagName === 'INPUT' ||
+    el.tagName === 'TEXTAREA' ||
+    el.tagName === 'SELECT' ||
+    el.isContentEditable
+  );
+}
+
 addEventListener('keydown', (e) => {
+  if (isTyping(e.target)) return;
   if (KEYS[e.code]) e.preventDefault();
   setKey(e.code, true);
 });
+// Releases are always honoured, even from a focused field: ignoring one could
+// leave a key stuck down if focus moved while it was held.
 addEventListener('keyup', (e) => setKey(e.code, false));
 addEventListener('blur', () => {
   for (const k of Object.keys(input) as (keyof Input)[]) input[k] = false;
@@ -204,10 +224,18 @@ if (isTouch) {
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   const name = (document.getElementById('name') as HTMLInputElement).value || 'Player';
-  const room = (document.getElementById('room') as HTMLInputElement).value || 'court';
+  // Normalised the same way on both transports, so "Court " and "court" are
+  // the same room. Two people who think they typed the same code must land
+  // together, or they sit in separate rooms with nothing to tell them why.
+  const room = normaliseRoom((document.getElementById('room') as HTMLInputElement).value);
   const mode = (document.getElementById('mode') as HTMLSelectElement).value as Mode;
+  // Drop focus from the form so the first keystroke of the match is a move,
+  // not a re-submit of whatever button is still focused.
+  (document.activeElement as HTMLElement | null)?.blur();
   connect(name, room, mode);
 });
+
+const normaliseRoom = (raw: string) => (raw || 'court').trim().toLowerCase().slice(0, 24) || 'court';
 
 function connect(name: string, room: string, mode: Mode): void {
   errorBox.textContent = '';
@@ -219,12 +247,14 @@ function connect(name: string, room: string, mode: Mode): void {
       if (msg.t === 'joined') {
         selfId = msg.id;
         menu.style.display = 'none';
+        roomTag.textContent = `room “${msg.room}”`;
         if (isTouch) touchLayer.hidden = false;
       } else if (msg.t === 'state') {
         state = msg.state;
       } else if (msg.t === 'error') {
         errorBox.textContent = msg.message;
         menu.style.display = 'grid';
+        roomTag.textContent = '';
         touchLayer.hidden = true;
         transport?.close();
         transport = null;
