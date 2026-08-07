@@ -57,6 +57,19 @@
         opacity: 0.65;
         pointer-events: none;
       }
+      #status {
+        position: absolute;
+        left: 12px;
+        bottom: 28px;
+        max-width: min(70%, 460px);
+        font-size: 13px;
+        pointer-events: none;
+        transition: color 200ms ease;
+      }
+      #status[data-state='connecting'] { color: #ffd98a; }
+      #status[data-state='waiting'] { color: #ffd98a; }
+      #status[data-state='live'] { color: #7fe0b0; }
+      #status[data-state='failed'] { color: #ff9a8a; }
       #menu {
         position: absolute;
         inset: 0;
@@ -182,6 +195,9 @@
       <!-- Shown during play: two people who typed different codes need to be
            able to see that, rather than staring at an empty court. -->
       <div id="roomtag"></div>
+      <!-- Connection state in words, so a silent failure is never mistaken for
+           an empty court. -->
+      <div id="status"></div>
       <div id="menu">
         <form id="join">
           <h1>Pickleball</h1>
@@ -218,6 +234,26 @@
 
     <div id="rotate"><p>Turn your phone sideways to play.</p></div>
 
+    <!--
+      Pages caches this HTML for ten minutes, but each deploy replaces the
+      hashed bundle and deletes the old one. A browser holding stale HTML would
+      therefore request a script that no longer exists and sit on a blank page
+      with no error a player could act on. If the bundle has not announced
+      itself shortly after load, reload once to pick up fresh HTML. The
+      session flag stops that becoming a loop when something else is wrong.
+    -->
+    <script>
+      setTimeout(function () {
+        if (window.__pbBooted) return;
+        if (sessionStorage.getItem('pickleball:reloaded')) {
+          document.getElementById('hint').textContent =
+            'Could not load the game. Try a hard refresh, or check your connection.';
+          return;
+        }
+        sessionStorage.setItem('pickleball:reloaded', '1');
+        location.reload();
+      }, 5000);
+    </script>
     <!-- Relative, not absolute: GitHub Pages serves this from /<repo>/. -->
     <script type="module" src="./bundle.js"></script>
   </body>

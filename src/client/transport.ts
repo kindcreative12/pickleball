@@ -1,7 +1,14 @@
 import { joinRoom, selfId } from 'trystero';
 import { BROADCAST_HZ, PROTOCOL_VERSION, TICK_DT, TICK_HZ } from '../shared/constants.js';
 import { Game } from '../shared/game.js';
-import type { ClientMessage, GameState, Input, Mode, ServerMessage } from '../shared/types.js';
+import type {
+  ClientMessage,
+  GameState,
+  Input,
+  LinkState,
+  Mode,
+  ServerMessage,
+} from '../shared/types.js';
 
 /**
  * Both connection styles look the same to the rest of the client: send intent,
@@ -32,9 +39,12 @@ function websocketTransport(o: TransportOptions): Transport {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const sock = new WebSocket(`${proto}://${location.host}`);
 
-  sock.addEventListener('open', () =>
-    sock.send(JSON.stringify({ t: 'join', room: o.room, name: o.name, mode: o.gameMode })),
-  );
+  o.onMessage({ t: 'status', state: 'connecting', text: 'Connecting to the server…' });
+
+  sock.addEventListener('open', () => {
+    sock.send(JSON.stringify({ t: 'join', room: o.room, name: o.name, mode: o.gameMode }));
+    o.onMessage({ t: 'status', state: 'live', text: `Connected to the server, room “${o.room}”.` });
+  });
   sock.addEventListener('message', (e) => o.onMessage(JSON.parse(e.data as string) as ServerMessage));
   sock.addEventListener('close', () => o.onMessage({ t: 'error', message: 'Disconnected' }));
 
@@ -56,9 +66,25 @@ function websocketTransport(o: TransportOptions): Transport {
  * cost of having no server to hold the match.
  */
 function p2pTransport(o: TransportOptions): Transport {
+  const emit = (state: LinkState, text: string) => o.onMessage({ t: 'status', state, text });
+
   // The room code doubles as the encryption password, so only people who were
   // told the code can read the signalling traffic.
-  const room = joinRoom({ appId: APP_ID, password: o.room }, o.room);
+  const room = joinRoom({ appId: APP_ID, password: o.room }, o.room, {
+    onJoinError: ({ error }) => emit('failed', `Matchmaking failed: ${error}`),
+  });
+
+  emit('connecting', `Looking for players in “${o.room}”…`);
+
+  /**
+   * Peer discovery failing looks exactly like nobody having joined yet, so say
+   * the most likely cause out loud rather than leaving an empty court.
+   */
+  const lonely = setTimeout(() => {
+    if (peerIds().length === 0) {
+      emit('waiting', `Still alone in “${o.room}” — check you both typed the same room code.`);
+    }
+  }, 12000);
 
   const names = new Map<string, string>([[selfId, o.name]]);
   let hostId: string | null = null;
@@ -140,18 +166,29 @@ function p2pTransport(o: TransportOptions): Transport {
     loop = null;
   }
 
+  const describe = () => {
+    const count = peerIds().length;
+    if (count === 0) return `Alone in “${o.room}” — waiting for someone to join.`;
+    return `${count} other player${count > 1 ? 's' : ''} connected · you are ${
+      isHost() ? 'hosting' : 'a guest'
+    }.`;
+  };
+
   room.onPeerJoin = (peerId) => {
+    clearTimeout(lonely);
     void nameAction.send(greeting() as unknown as Parameters<typeof nameAction.send>[0], {
       target: peerId,
     });
     elect();
     if (isHost() && game) game.addPlayer(peerId, names.get(peerId) ?? 'Player');
+    emit('live', describe());
   };
 
   room.onPeerLeave = (peerId) => {
     names.delete(peerId);
     if (isHost() && game) game.removePlayer(peerId);
     elect();
+    emit(peerIds().length === 0 ? 'waiting' : 'live', describe());
   };
 
   // Alone in the room, we host by default; the election corrects this the
@@ -166,6 +203,7 @@ function p2pTransport(o: TransportOptions): Transport {
       else void inputAction.send(msg.input as unknown as Parameters<typeof inputAction.send>[0]);
     },
     close: () => {
+      clearTimeout(lonely);
       stopHosting();
       void room.leave();
     },

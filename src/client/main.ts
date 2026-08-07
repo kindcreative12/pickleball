@@ -23,6 +23,7 @@ const errorBox = document.getElementById('error') as HTMLDivElement;
 const scoreBox = document.getElementById('score') as HTMLDivElement;
 const messageBox = document.getElementById('message') as HTMLDivElement;
 const roomTag = document.getElementById('roomtag') as HTMLDivElement;
+const statusBox = document.getElementById('status') as HTMLDivElement;
 
 const MARGIN = 46;
 const SCALE = (canvas.width - MARGIN * 2) / COURT_LENGTH;
@@ -221,6 +222,26 @@ if (isTouch) {
 
 // --- connection -------------------------------------------------------------
 
+const REJOIN_KEY = 'pickleball:rejoin';
+let hasJoined = false;
+
+/**
+ * Leaving a Trystero room tears down its matchmaking sockets, and joining
+ * again from the same page instance silently never discovers anyone — the
+ * court comes up and stays empty forever. Reloading hands us a clean instance.
+ * The page is small and cached, so it costs a blink, and the intent is carried
+ * across in session storage so the player does not retype anything.
+ */
+function join(name: string, room: string, mode: Mode): void {
+  if (hasJoined) {
+    sessionStorage.setItem(REJOIN_KEY, JSON.stringify({ name, room, mode }));
+    location.reload();
+    return;
+  }
+  hasJoined = true;
+  connect(name, room, mode);
+}
+
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   const name = (document.getElementById('name') as HTMLInputElement).value || 'Player';
@@ -232,7 +253,7 @@ form.addEventListener('submit', (e) => {
   // Drop focus from the form so the first keystroke of the match is a move,
   // not a re-submit of whatever button is still focused.
   (document.activeElement as HTMLElement | null)?.blur();
-  connect(name, room, mode);
+  join(name, room, mode);
 });
 
 const normaliseRoom = (raw: string) => (raw || 'court').trim().toLowerCase().slice(0, 24) || 'court';
@@ -244,7 +265,15 @@ function connect(name: string, room: string, mode: Mode): void {
     name,
     gameMode: mode,
     onMessage: (msg) => {
-      if (msg.t === 'joined') {
+      if (msg.t === 'status') {
+        statusBox.textContent = msg.text;
+        statusBox.dataset.state = msg.state;
+        // A failure before the court is up belongs on the menu, where the
+        // player is still looking.
+        if (msg.state === 'failed' && menu.style.display !== 'none') {
+          errorBox.textContent = msg.text;
+        }
+      } else if (msg.t === 'joined') {
         selfId = msg.id;
         menu.style.display = 'none';
         roomTag.textContent = `room “${msg.room}”`;
@@ -404,3 +433,29 @@ function drawBall(x: number, y: number, z: number, spin: number): void {
 }
 
 draw();
+
+// The page has finished evaluating, which the boot watchdog in index.html is
+// waiting to hear: cached HTML can outlive the hashed bundle it points at, and
+// a silent 404 would otherwise leave a blank court.
+(window as unknown as { __pbBooted?: boolean }).__pbBooted = true;
+sessionStorage.removeItem('pickleball:reloaded');
+
+// Carry a rejoin across the reload that `join` performs, so returning to the
+// menu and picking another room just works.
+const pendingRejoin = sessionStorage.getItem(REJOIN_KEY);
+if (pendingRejoin) {
+  sessionStorage.removeItem(REJOIN_KEY);
+  try {
+    const { name, room, mode } = JSON.parse(pendingRejoin) as {
+      name: string;
+      room: string;
+      mode: Mode;
+    };
+    (document.getElementById('name') as HTMLInputElement).value = name;
+    (document.getElementById('room') as HTMLInputElement).value = room;
+    (document.getElementById('mode') as HTMLSelectElement).value = mode;
+    join(name, room, mode);
+  } catch {
+    // Malformed intent is not worth failing the page over.
+  }
+}

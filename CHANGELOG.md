@@ -5,6 +5,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-08-07
+
+### Fixed
+
+- Joining a second room in the same session never connected to anyone. Leaving a room tears down Trystero's matchmaking sockets and the instance could not rebuild them, so the court came up and stayed empty forever with nothing to indicate why. Rejoining now reloads the page for a clean instance, carrying name, room and mode across so nothing is retyped.
+- Cached HTML could outlive the hashed bundle it points at, since each deploy deletes the previous one — leaving a blank page and no error. A boot watchdog reloads once if the bundle has not announced itself, and says so plainly rather than looping if that does not help.
+
+### Added
+
+- Connection status in words, colour-coded: looking for players, alone in the room, how many are connected and whether you are hosting, and matchmaking failures. If nobody has appeared after twelve seconds it names the likeliest cause — the two of you typing different room codes — instead of leaving an empty court to interpret.
+
 ## [0.4.0] — 2026-08-07
 
 ### Fixed

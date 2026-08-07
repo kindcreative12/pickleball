@@ -64,7 +64,11 @@ export type ClientMessage =
   | { t: 'join'; room: string; name: string; mode: Mode }
   | { t: 'input'; input: Input };
 
+/** How the link to the other players is doing, in terms a player can act on. */
+export type LinkState = 'connecting' | 'waiting' | 'live' | 'failed';
+
 export type ServerMessage =
+  | { t: 'status'; state: LinkState; text: string }
   // `side` is absent in peer-to-peer play: the host assigns sides, and a peer
   // learns its own from the first state it receives.
   | { t: 'joined'; id: string; room: string; mode: Mode; side?: Side }
