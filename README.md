@@ -99,11 +99,15 @@ The costs of that, stated plainly:
 - The host could cheat, since it owns the simulation.
 - If the host leaves, the next-lowest peer takes over with a **fresh game** — the score resets.
 
-## When it will not connect
+## Connecting
 
-WebRTC tries a direct connection first, helped by STUN. That fails behind symmetric NAT, which mobile carriers use routinely via CGNAT. The fix is a TURN relay, which forwards packets between peers — real bandwidth, no longer peer-to-peer, and not configured here.
+WebRTC tries a direct connection first, helped by STUN. That fails behind symmetric NAT — which mobile carriers use routinely via CGNAT — and it fails in a particular way: the peers exchange SDP, agree on everything, and still cannot reach each other.
 
-In practice: players on home WiFi or broadband almost always connect directly. Mobile data is a coin flip. If it becomes a problem, `turnConfig` in `src/client/transport.ts` is where a relay would go.
+So a **TURN relay** is configured in `ICE_SERVERS` in `src/client/transport.ts`. It forwards packets between peers when the direct path fails. That is no longer peer-to-peer and it spends the relay's bandwidth, so the status line tells you which one you got — *"Connected directly"* or *"Connected through a relay"*.
+
+The relay currently in use is Open Relay's free shared endpoint. It is rate limited and shared with the whole internet, so if connections turn flaky the fixes are, in order of effort: your own free credentials from [metered.ca](https://www.metered.ca/tools/openrelay/) (20GB/month), or a `coturn` box near your players — for Singapore that is single-digit milliseconds away.
+
+The status line reports the rest too: whether matchmaking is still looking, how many peers are connected, whether you are hosting, and — after twelve seconds alone — that you and your friend may have typed different room codes.
 
 ## Rules modelled
 

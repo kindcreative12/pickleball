@@ -5,6 +5,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-08-07
+
+### Fixed
+
+- Two real devices could find each other and then fail to connect: SDP exchanged, everything agreed, no link. That is symmetric NAT, which mobile carriers use routinely, and no amount of STUN solves it. A TURN relay is now configured, including TCP and TLS on 443 for networks that block plain UDP.
+
+### Added
+
+- The status line says whether the link ended up direct or relayed. A relayed game is slower and spends someone's bandwidth, so it should not be a silent outcome.
+
 ## [0.4.1] — 2026-08-07
 
 ### Fixed

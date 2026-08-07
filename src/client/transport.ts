@@ -29,6 +29,34 @@ export interface TransportOptions {
 
 const APP_ID = 'pickleball-court';
 
+/**
+ * Hole punching fails outright behind carrier-grade NAT, which is what mobile
+ * networks use: the two peers exchange SDP, agree on everything, and still
+ * cannot reach each other. STUN alone cannot fix that. A TURN relay forwards
+ * their packets instead — no longer peer-to-peer, and it costs the relay
+ * bandwidth, but it is the only thing that connects from such a network.
+ *
+ * These are Open Relay's free shared credentials, which means they are rate
+ * limited and shared with the entire internet. If connections turn flaky, the
+ * fix is your own credentials (free, 20GB/month from metered.ca) or a coturn
+ * box near the players — for Singapore that is single-digit milliseconds away.
+ */
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  {
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      // TCP and TLS on 443 survive networks that block plain UDP.
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
+
 export function createTransport(kind: 'ws' | 'p2p', o: TransportOptions): Transport {
   return kind === 'ws' ? websocketTransport(o) : p2pTransport(o);
 }
@@ -70,9 +98,14 @@ function p2pTransport(o: TransportOptions): Transport {
 
   // The room code doubles as the encryption password, so only people who were
   // told the code can read the signalling traffic.
-  const room = joinRoom({ appId: APP_ID, password: o.room }, o.room, {
-    onJoinError: ({ error }) => emit('failed', `Matchmaking failed: ${error}`),
-  });
+  const room = joinRoom(
+    { appId: APP_ID, password: o.room, rtcConfig: { iceServers: ICE_SERVERS } },
+    o.room,
+    {
+      onJoinError: ({ error }) =>
+        emit('failed', `Could not reach the other player, even via relay. ${error}`),
+    },
+  );
 
   emit('connecting', `Looking for players in “${o.room}”…`);
 
@@ -174,6 +207,39 @@ function p2pTransport(o: TransportOptions): Transport {
     }.`;
   };
 
+  /**
+   * Whether ICE settled on a direct path or fell back to the relay. Worth
+   * surfacing: a relayed game is slower and spends someone's bandwidth, so it
+   * should not be a silent outcome.
+   */
+  async function pathKind(peerId: string): Promise<string> {
+    const pc = room.getPeers()[peerId];
+    if (!pc) return '';
+    try {
+      // RTCStatsReport is a Map at runtime, but the DOM types do not say so.
+      const stats = (await pc.getStats()) as unknown as Map<string, Record<string, string>>;
+      const pair = [...stats.values()].find(
+        (r) => r.type === 'candidate-pair' && r.state === 'succeeded',
+      );
+      if (!pair) return '';
+      const local = stats.get(pair.localCandidateId);
+      const remote = stats.get(pair.remoteCandidateId);
+      const relayed = local?.candidateType === 'relay' || remote?.candidateType === 'relay';
+      return relayed ? 'through a relay' : 'directly';
+    } catch {
+      return '';
+    }
+  }
+
+  function reportLink(): void {
+    emit('live', describe());
+    const [first] = peerIds();
+    if (!first) return;
+    void pathKind(first).then((kind) => {
+      if (kind && peerIds().length > 0) emit('live', `${describe()} Connected ${kind}.`);
+    });
+  }
+
   room.onPeerJoin = (peerId) => {
     clearTimeout(lonely);
     void nameAction.send(greeting() as unknown as Parameters<typeof nameAction.send>[0], {
@@ -181,7 +247,7 @@ function p2pTransport(o: TransportOptions): Transport {
     });
     elect();
     if (isHost() && game) game.addPlayer(peerId, names.get(peerId) ?? 'Player');
-    emit('live', describe());
+    reportLink();
   };
 
   room.onPeerLeave = (peerId) => {
