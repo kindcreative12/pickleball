@@ -111,7 +111,9 @@ Real pickleball rules that actually change the code:
 
 - **Two-bounce rule** — the return of serve and the third shot must each be played off a bounce
 - **Non-volley zone (the kitchen)** — no volleying while standing within 7ft of the net
-- **Net, out, and double-bounce faults**
+- **The serve must go cross-court**, landing in the service court diagonally opposite, and must clear the kitchen line. The service court alternates as the serving side scores.
+- **Only the first bounce decides in or out.** Once a shot has landed in, the receiver owes a return, and a second bounce ends the rally in the hitter's favour wherever it lands — letting a good shot bounce again off the court is not a reprieve.
+- **Net, out, and did-not-cross faults**
 
 Scoring is rally scoring to 11, win by 2. Real pickleball uses side-out scoring; rally scoring was chosen to keep games short.
 

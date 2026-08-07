@@ -5,6 +5,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-08-07
+
+### Fixed
+
+- Every bounce was tested for being in or out, so a rally-winning shot could be scored against the player who hit it: the receiver failed to return, the ball bounced a second time beyond the line, and the point went the wrong way. Only the first bounce decides in or out now — after that a second bounce ends the rally in the hitter's favour wherever it lands.
+
+### Added
+
+- The serve must go cross-court, landing in the service court diagonally opposite and clearing the kitchen line, with faults named for each. The service court alternates as the serving side scores, and both players are positioned accordingly — server in the court they are serving from, receiver in the diagonal one the ball is coming to.
+- Serves are aimed into the legal box by default, at a depth that clears the kitchen with margin without amounting to a near-ace.
+
 ## [0.3.1] — 2026-08-07
 
 ### Fixed

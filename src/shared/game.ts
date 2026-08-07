@@ -93,6 +93,8 @@ export class Game {
   private phase: Phase = 'waiting';
   private score: Record<Side, number> = { left: 0, right: 0 };
   private serving: Side = 'left';
+  /** Which service court the serve is struck from; the target is the diagonal. */
+  private serveFromTop = true;
   private message = 'Waiting for players…';
 
   /** Counts down to the next serve, or to the reset after a point. */
@@ -331,15 +333,22 @@ export class Game {
 
   private onBounce(): void {
     const b = this.ball;
-    const inBounds =
-      b.x >= 0 && b.x <= COURT_LENGTH && b.y >= 0 && b.y <= COURT_WIDTH;
+    const landedOn: Side = b.x < NET_X ? 'left' : 'right';
 
+    // Only the first bounce decides in or out. Once a shot has landed in, the
+    // receiver owes a return, and a second bounce ends the rally in the
+    // hitter's favour wherever it happens to land — chasing a good shot off
+    // the court and letting it bounce again is not a reprieve.
+    if (this.bouncesSinceHit >= 1) {
+      this.awardPoint(this.lastHitSide ?? other(landedOn), 'Two bounces');
+      return;
+    }
+
+    const inBounds = b.x >= 0 && b.x <= COURT_LENGTH && b.y >= 0 && b.y <= COURT_WIDTH;
     if (!inBounds) {
       this.faultAgainst(this.lastHitSide, 'Out');
       return;
     }
-
-    const landedOn: Side = b.x < NET_X ? 'left' : 'right';
 
     // A ball that bounces on the hitter's own side never made it over.
     if (this.lastHitSide && landedOn === this.lastHitSide) {
@@ -347,10 +356,24 @@ export class Game {
       return;
     }
 
-    this.bouncesSinceHit += 1;
-    if (this.bouncesSinceHit >= 2) {
-      this.awardPoint(other(landedOn), 'Two bounces');
+    // The serve carries two extra conditions the rest of the rally does not.
+    if (this.shotsThisRally === 1) {
+      const clearedKitchen =
+        this.serving === 'left' ? b.x > NET_X + KITCHEN_DEPTH : b.x < NET_X - KITCHEN_DEPTH;
+      if (!clearedKitchen) {
+        this.faultAgainst(this.serving, 'Serve landed in the kitchen');
+        return;
+      }
+      // Cross-court: a serve struck from one service court must land in the
+      // one diagonally opposite.
+      const landedTop = b.y < COURT_WIDTH / 2;
+      if (landedTop === this.serveFromTop) {
+        this.faultAgainst(this.serving, 'Serve must go cross-court');
+        return;
+      }
     }
+
+    this.bouncesSinceHit += 1;
   }
 
   // --- striking -------------------------------------------------------------
@@ -490,10 +513,19 @@ export class Game {
 
     const dirX = this.serving === 'left' ? 1 : -1;
     const speed = 22;
+
+    // Aim well past the kitchen line and into the diagonal service court, so a
+    // default serve is legal and the player has to work to miss it.
+    // Deep enough to clear the kitchen line with margin, shallow enough that
+    // the receiver has a rally to play rather than a near-ace to chase.
+    const targetX = this.targetDepth(this.serving, 0.62);
+    const targetY = this.serveFromTop ? COURT_WIDTH * 0.72 : COURT_WIDTH * 0.28;
+    const flight = Math.max(0.1, Math.abs(targetX - b.x) / speed);
+
     b.vx = dirX * speed;
-    b.vy = clamp((COURT_WIDTH / 2 - server.y) * 0.8, -6, 6);
+    b.vy = clamp((targetY - b.y) / flight, -12, 12);
     b.spin = 0;
-    b.vz = this.launchToLand(this.targetDepth(this.serving, 0.55), speed);
+    b.vz = this.launchToLand(targetX, speed);
 
     this.phase = 'rally';
     this.message = '';
@@ -510,6 +542,8 @@ export class Game {
       return;
     }
     this.serving = side;
+    // Real pickleball alternates service courts as the serving side scores.
+    this.serveFromTop = this.score[side] % 2 === 0;
     this.phase = 'serving';
     this.timer = SERVE_DELAY;
     this.message = `${side === 'left' ? 'Left' : 'Right'} to serve`;
@@ -523,12 +557,21 @@ export class Game {
     }
   }
 
+  /**
+   * The server stands in the service court they are serving from, and the
+   * receiver stands in the diagonal one that the ball is coming to. In doubles
+   * the partner takes the other court.
+   */
   private placeForServe(p: Player): void {
+    const serves = p.side === this.serving;
+    const top = serves ? this.serveFromTop : !this.serveFromTop;
+
     const mates = this.players.filter((q) => q.side === p.side);
     const index = Math.max(0, mates.indexOf(p));
-    const lane = mates.length > 1 ? (index === 0 ? 0.3 : 0.7) : 0.5;
+    const inTop = mates.length > 1 && index === 1 ? !top : top;
+
     p.x = p.side === 'left' ? 3 : COURT_LENGTH - 3;
-    p.y = COURT_WIDTH * lane;
+    p.y = COURT_WIDTH * (inTop ? 0.28 : 0.72);
   }
 
   /** A fault by `side` gives the point to their opponent. */
