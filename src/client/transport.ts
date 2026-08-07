@@ -45,13 +45,10 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
   {
-    urls: [
-      'turn:openrelay.metered.ca:80',
-      'turn:openrelay.metered.ca:443',
-      // TCP and TLS on 443 survive networks that block plain UDP.
-      'turn:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:443?transport=tcp',
-    ],
+    // Only port 80 answers on this host — 443 is closed, so URLs pointing there
+    // just burn gathering time. The TCP variant matters: plenty of mobile
+    // networks drop UDP to unusual ports entirely.
+    urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:80?transport=tcp'],
     username: 'openrelayproject',
     credential: 'openrelayproject',
   },
@@ -59,6 +56,47 @@ const ICE_SERVERS: RTCIceServer[] = [
 
 export function createTransport(kind: 'ws' | 'p2p', o: TransportOptions): Transport {
   return kind === 'ws' ? websocketTransport(o) : p2pTransport(o);
+}
+
+/**
+ * Asks the browser to gather relay candidates and nothing else. If one arrives
+ * the TURN server is reachable and the credentials are good; if none does,
+ * relaying is unavailable and any peer who cannot be reached directly will
+ * fail. Answerable from a single device, which beats coordinating two phones
+ * to find out.
+ */
+export function probeRelay(): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let pc: RTCPeerConnection;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      try {
+        pc.close();
+      } catch {
+        // already gone
+      }
+      resolve(ok);
+    };
+
+    try {
+      pc = new RTCPeerConnection({ iceServers: ICE_SERVERS, iceTransportPolicy: 'relay' });
+    } catch {
+      resolve(false);
+      return;
+    }
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate && e.candidate.candidate.includes(' typ relay')) finish(true);
+    };
+    pc.createDataChannel('probe');
+    pc.createOffer()
+      .then((offer) => pc.setLocalDescription(offer))
+      .catch(() => finish(false));
+
+    setTimeout(() => finish(false), 8000);
+  });
 }
 
 // --- websocket: a Node server owns the simulation ---------------------------
@@ -108,6 +146,17 @@ function p2pTransport(o: TransportOptions): Transport {
   );
 
   emit('connecting', `Looking for players in “${o.room}”…`);
+
+  // Say up front if relaying is unavailable, rather than after a peer arrives
+  // and the connection mysteriously fails.
+  void probeRelay().then((ok) => {
+    if (!ok && peerIds().length === 0) {
+      emit(
+        'waiting',
+        `Looking for players in “${o.room}”… Relay unavailable, so this will only work if a direct connection is possible — mobile data often is not.`,
+      );
+    }
+  });
 
   /**
    * Peer discovery failing looks exactly like nobody having joined yet, so say
